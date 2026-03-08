@@ -4,10 +4,9 @@ services:
   db:
     image: postgres:15-alpine
     container_name: eastleigh_db
-    env_file:
-      - .env
     environment:
       POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: eastleigh_academy
     volumes:
       - postgres_data:/var/lib/postgresql/data
@@ -24,11 +23,11 @@ services:
   backend:
     build: ./backend
     container_name: eastleigh_backend
-    env_file:
-      - .env
     environment:
       - FLASK_ENV=production
       - DOCKER_ENV=true
+      - SECRET_KEY=${SECRET_KEY}
+      - DATABASE_URL=postgresql://postgres:${POSTGRES_PASSWORD}@db:5432/eastleigh_academy
     ports:
       - "5000:5000"
     depends_on:
@@ -45,8 +44,10 @@ services:
   frontend:
     build: ./frontend
     container_name: eastleigh_frontend
-    env_file:
-      - .env
+    environment:
+      - REACT_APP_API_URL=${REACT_APP_API_URL}
+      - REACT_APP_ADMIN_USERNAME=${REACT_APP_ADMIN_USERNAME}
+      - REACT_APP_ADMIN_PASSWORD=${REACT_APP_ADMIN_PASSWORD}
     ports:
       - "3000:80"
     depends_on:

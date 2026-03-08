@@ -288,7 +288,64 @@ chmod +x tasks.py  # Make executable
 - Default admin: `admin` / `secure_admin_password_2024` (change immediately!)
 - Consider implementing proper authentication (JWT, OAuth) for production
 
-## 📝 Database Schema
+## � Deployment Guide
+
+### Quick Deploy to Railway (Recommended)
+
+1. **Create Railway Account**: https://railway.app
+
+2. **Connect Repository**:
+   - Click "New Project" → "Deploy from GitHub repo"
+   - Select your `eastleigh-united-fc` repository
+
+3. **Configure Environment Variables**:
+   ```
+   SECRET_KEY=your-generated-secret-key-here
+   POSTGRES_PASSWORD=your-secure-db-password
+   REACT_APP_API_URL=https://your-backend-url.up.railway.app
+   REACT_APP_ADMIN_USERNAME=admin
+   REACT_APP_ADMIN_PASSWORD=your-secure-admin-password
+   ```
+
+4. **Deploy**: Railway will automatically detect and deploy your Docker setup
+
+5. **Access Your Site**: Get the frontend URL from Railway dashboard
+
+### Alternative: Deploy to Render
+
+1. **Create Render Account**: https://render.com
+
+2. **Create Services**:
+   - PostgreSQL database
+   - Web service for backend (Docker)
+   - Web service for frontend (Docker)
+
+3. **Set Environment Variables** in each service
+
+### Production Environment Setup
+
+```bash
+# Generate secure secret key
+python3 -c "import secrets; print(secrets.token_hex(32))"
+
+# Set these environment variables in your hosting platform:
+SECRET_KEY=<generated-key>
+POSTGRES_PASSWORD=<strong-password>
+REACT_APP_API_URL=<your-backend-url>
+REACT_APP_ADMIN_USERNAME=<admin-username>
+REACT_APP_ADMIN_PASSWORD=<secure-admin-password>
+```
+
+### Deployment Checklist
+- [ ] Environment variables configured
+- [ ] Database password changed from default
+- [ ] Admin password changed from default
+- [ ] SECRET_KEY generated and set
+- [ ] CORS origins configured for production domain
+- [ ] HTTPS enabled
+- [ ] Domain configured (optional)
+
+## �📝 Database Schema
 
 ### Squads
 - `id`, `name`, `age_group`, `formation`, `head_coach`, `assistant_coach`, `created_at`
