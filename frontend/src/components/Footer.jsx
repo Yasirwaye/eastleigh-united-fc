@@ -2,11 +2,11 @@ import React from 'react';
 
 const Footer = () => {
   const socialLinks = [
-    { name: 'TikTok', url: '#' },
-    { name: 'Instagram', url: '#' },
-    { name: 'Facebook', url: '#' },
-    { name: 'Twitter', url: '#' },
-    { name: 'YouTube', url: '#' },
+    { name: 'TikTok', url: 'https://www.tiktok.com' },
+    { name: 'Instagram', url: 'https://www.instagram.com' },
+    { name: 'Facebook', url: 'https://www.facebook.com' },
+    { name: 'Twitter', url: 'https://www.twitter.com' },
+    { name: 'YouTube', url: 'https://www.youtube.com' },
   ];
 
   return (
@@ -58,12 +58,12 @@ const Footer = () => {
 
         <div className="border-t border-white/10 pt-8 flex flex-col md:flex-row justify-between items-center">
           <p className="text-gray-500 text-sm">
-            © 2024 Eastleigh FC Academy. All rights reserved.
+            © 2024 Eastleigh United FC Academy. All rights reserved.
           </p>
           <div className="flex space-x-6 mt-4 md:mt-0 text-sm text-gray-500">
-            <a href="#" className="hover:text-white transition-colors">Privacy Policy</a>
-            <a href="#" className="hover:text-white transition-colors">Terms of Service</a>
-            <a href="#" className="hover:text-white transition-colors">Cookie Policy</a>
+            <a href="/privacy" className="hover:text-white transition-colors">Privacy Policy</a>
+            <a href="/terms" className="hover:text-white transition-colors">Terms of Service</a>
+            <a href="/cookies" className="hover:text-white transition-colors">Cookie Policy</a>
           </div>
         </div>
       </div>

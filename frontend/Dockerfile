@@ -3,21 +3,19 @@ FROM node:18-alpine as build
 
 WORKDIR /app
 
-# Copy package files
+# Force cache bust by changing order
 COPY package*.json ./
-
-# Use npm install instead of npm ci (generates lock file if missing)
-RUN npm install
-
-# Copy tailwind config
 COPY tailwind.config.js ./
 COPY postcss.config.js ./
 
-# Copy source code
+# Install dependencies
+RUN npm install
+
+# Copy source code AFTER installing deps
 COPY . .
 
 # Build the app (includes Tailwind compilation)
-# Force rebuild - cache bust
+# Force rebuild - cache bust v10
 RUN npm run build --production
 
 # Production stage with nginx

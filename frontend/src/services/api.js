@@ -64,4 +64,6 @@ export const healthCheck = () => fetchAPI('/health');
 // Initialize database
 export const initDatabase = () => fetchAPI('/init', { method: 'POST' });
 
-export default { squadAPI, playerAPI, applicationAPI, healthCheck, initDatabase };
+const apiClient = { squadAPI, playerAPI, applicationAPI, healthCheck, initDatabase };
+
+export default apiClient;

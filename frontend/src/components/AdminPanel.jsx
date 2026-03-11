@@ -1,10 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { X, Plus, Trash2, Edit2, Shield, Database, AlertTriangle, Lock, LogOut } from 'lucide-react';
 import { squadAPI, playerAPI, applicationAPI, initDatabase } from '../services/api';
 
-// Admin credentials - loaded from environment variables
-const ADMIN_USERNAME = process.env.REACT_APP_ADMIN_USERNAME || 'admin';
-const ADMIN_PASSWORD = process.env.REACT_APP_ADMIN_PASSWORD || 'change-this-password';
+// Admin credentials - CHANGE THIS IN PRODUCTION!
+const ADMIN_USERNAME = 'admin';
+const ADMIN_PASSWORD = 'eastleigh2024';
 
 const AdminPanel = ({ onClose }) => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -43,11 +43,6 @@ const AdminPanel = ({ onClose }) => {
     }
   }, []);
 
-  useEffect(() => {
-    if (isAuthenticated) {
-      loadData();
-    }
-  }, [activeTab, isAuthenticated]);
 
   const handleLogin = (e) => {
     e.preventDefault();
@@ -68,7 +63,7 @@ const AdminPanel = ({ onClose }) => {
     setPassword('');
   };
 
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     setLoading(true);
     try {
       if (activeTab === 'squads') {
@@ -91,7 +86,13 @@ const AdminPanel = ({ onClose }) => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [activeTab]);
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      loadData();
+    }
+  }, [isAuthenticated, loadData]);
 
   const requestConfirm = (message, action) => {
     setConfirmMessage(message);
@@ -329,6 +330,14 @@ const AdminPanel = ({ onClose }) => {
   };
 
   // MAIN ADMIN PANEL
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-[#0a0e1a] flex items-center justify-center">
+        <div className="text-white">Loading...</div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-[#0a0e1a] text-white p-4">
       <ConfirmModal />
