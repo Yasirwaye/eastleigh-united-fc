@@ -16,7 +16,7 @@ export const storageAPI = {
     const fileExtension = file.name.split('.').pop();
     const key = `player-photos/${playerId || Date.now()}-${Math.random().toString(36).slice(2)}.${fileExtension}`;
 
-    const { data: uploadData, error: uploadError } = await supabase.storage
+    const { error: uploadError } = await supabase.storage
       .from('player-photos')
       .upload(key, file, { cacheControl: '3600', upsert: false });
 
