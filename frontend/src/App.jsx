@@ -60,7 +60,7 @@ function App() {
         onAdminClick={() => setShowAdmin(true)}
       />
       <Hero scrollToSection={scrollToSection} />
-      <Highlights />
+      {/* <Highlights /> */}
       <PlayerSpotlight />
       <Training />
       <Facilities />

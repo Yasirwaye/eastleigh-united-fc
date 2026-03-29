@@ -37,13 +37,13 @@ const Hero = ({ scrollToSection }) => {
                 <span>Start Your Journey</span>
                 <ChevronRight className="w-5 h-5" />
               </button>
-              <button
+              {/* <button
                 onClick={() => scrollToSection('highlights')}
                 className="glass px-8 py-4 rounded-full font-semibold hover:bg-white/10 transition-all flex items-center justify-center space-x-2"
               >
                 <Play className="w-5 h-5" />
                 <span>Watch Highlights</span>
-              </button>
+              </button> */}
             </div>
 
             <div className="flex items-center space-x-8 mt-12">
