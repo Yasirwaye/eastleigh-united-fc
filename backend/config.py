@@ -9,13 +9,24 @@ if os.path.exists(env_file):
     load_dotenv(env_file)
 
 class Config:
-    # SECRET_KEY - use environment variable or fallback for development
-    SECRET_KEY = os.environ.get('SECRET_KEY', 'dev-secret-key-change-in-production')
-    
+    # SECRET_KEY - REQUIRED environment variable
+    SECRET_KEY = os.environ.get('SECRET_KEY')
+    if not SECRET_KEY:
+        raise ValueError('SECRET_KEY environment variable is required')
+
+    # JWT configuration
+    JWT_SECRET_KEY = SECRET_KEY  # Use same secret for JWT
+    JWT_ACCESS_TOKEN_EXPIRES = 3600  # 1 hour
+
     # Database configuration
     SQLALCHEMY_DATABASE_URI = os.environ.get('DATABASE_URL') or 'sqlite:///eastleigh_academy.db'
     SQLALCHEMY_TRACK_MODIFICATIONS = False
-    CORS_HEADERS = 'Content-Type'
+
+    # CORS configuration
+    CORS_ORIGINS = os.environ.get('CORS_ORIGINS', 'http://localhost:3000').split(',')
+
+    # Rate limiting
+    RATELIMIT_STORAGE_URI = os.environ.get('REDIS_URL', 'memory://')
 
     # Environment settings
     FLASK_ENV = os.environ.get('FLASK_ENV', 'development')

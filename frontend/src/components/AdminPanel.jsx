@@ -1,16 +1,15 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { X, Plus, Trash2, Edit2, Shield, Database, AlertTriangle, Lock, LogOut } from 'lucide-react';
-import { squadAPI, playerAPI, applicationAPI, initDatabase } from '../services/api';
-
-// Admin credentials - CHANGE THIS IN PRODUCTION!
-const ADMIN_USERNAME = 'admin';
-const ADMIN_PASSWORD = 'eastleigh2024';
+import { squadAPI, playerAPI, applicationAPI, initDatabase, adminAPI } from '../services/api';
 
 const AdminPanel = ({ onClose }) => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [authError, setAuthError] = useState('');
+  const [isSignup, setIsSignup] = useState(false);
+  const [signupData, setSignupData] = useState({ username: '', email: '', password: '', confirmPassword: '' });
+  const [signupError, setSignupError] = useState('');
   
   const [activeTab, setActiveTab] = useState('squads');
   const [squads, setSquads] = useState([]);
@@ -32,33 +31,54 @@ const AdminPanel = ({ onClose }) => {
     name: '', age_group: '', formation: '4-3-3', head_coach: '', assistant_coach: ''
   });
   const [playerForm, setPlayerForm] = useState({
-    first_name: '', last_name: '', age: '', position: 'MID', squad_id: '', image_url: '', image_file: null,
+    first_name: '', last_name: '', age: '', position: 'MID', squad_id: '',
+    image_url: '', image_file: null, is_spotlight: false,
     stats_goals: 0, stats_assists: 0, stats_matches: 0, quote: ''
   });
 
   useEffect(() => {
-    const auth = sessionStorage.getItem('eastleigh_admin_auth');
-    if (auth === 'true') {
+    const token = localStorage.getItem('eastleigh_admin_token');
+    if (token) {
       setIsAuthenticated(true);
     }
   }, []);
 
-
-  const handleLogin = (e) => {
+  const handleLogin = async (e) => {
     e.preventDefault();
-    if (username === ADMIN_USERNAME && password === ADMIN_PASSWORD) {
+    setAuthError('');
+    try {
+      const response = await adminAPI.login({ email: username, password });
+      localStorage.setItem('eastleigh_admin_token', response.access_token);
       setIsAuthenticated(true);
-      sessionStorage.setItem('eastleigh_admin_auth', 'true');
-      setAuthError('');
-    } else {
-      setAuthError('Invalid username or password');
+    } catch (err) {
+      setAuthError(err.message || 'Login failed');
       setPassword('');
+    }
+  };
+
+  const handleSignup = async (e) => {
+    e.preventDefault();
+    setSignupError('');
+    
+    if (signupData.password !== signupData.confirmPassword) {
+      setSignupError('Passwords do not match');
+      return;
+    }
+    
+    try {
+      const response = await adminAPI.signup(signupData);
+      localStorage.setItem('eastleigh_admin_token', response.access_token);
+      setIsAuthenticated(true);
+      setIsSignup(false);
+      setSignupData({ username: '', email: '', password: '', confirmPassword: '' });
+    } catch (err) {
+      setSignupError(err.message || 'Signup failed');
     }
   };
 
   const handleLogout = () => {
     setIsAuthenticated(false);
-    sessionStorage.removeItem('eastleigh_admin_auth');
+    localStorage.removeItem('eastleigh_admin_token');
     setUsername('');
     setPassword('');
   };
@@ -151,16 +171,6 @@ const AdminPanel = ({ onClose }) => {
     });
   };
 
-  const fileToDataUrl = (file) => {
-    return new Promise((resolve, reject) => {
-      if (!file) return resolve('');
-      const reader = new FileReader();
-      reader.onload = () => resolve(reader.result);
-      reader.onerror = () => reject(new Error('Failed to read image file'));
-      reader.readAsDataURL(file);
-    });
-  };
-
   const handleCreatePlayer = async (e) => {
     e.preventDefault();
 
@@ -169,17 +179,29 @@ const AdminPanel = ({ onClose }) => {
       return;
     }
 
+    const spotlightCount = players.filter((p) => p.is_spotlight).length;
+    if (playerForm.is_spotlight && spotlightCount >= 4) {
+      alert('Only 4 players can be spotlighted. Unselect one before adding another.');
+      return;
+    }
+
     try {
-      const payload = { ...playerForm };
+      const payload = {
+        ...playerForm,
+        image_url: playerForm.image_url || null,
+      };
+
       if (playerForm.image_file) {
         payload.image_url = await fileToDataUrl(playerForm.image_file);
       }
+
       delete payload.image_file;
 
       await playerAPI.create(payload);
       setShowPlayerForm(false);
       setPlayerForm({
-        first_name: '', last_name: '', age: '', position: 'MID', squad_id: '', image_url: '', image_file: null,
+        first_name: '', last_name: '', age: '', position: 'MID', squad_id: '',
+        image_url: '', image_file: null, is_spotlight: false,
         stats_goals: 0, stats_assists: 0, stats_matches: 0, quote: ''
       });
       loadData();
@@ -196,11 +218,22 @@ const AdminPanel = ({ onClose }) => {
       return;
     }
 
+    const spotlightCount = players.filter((p) => p.is_spotlight && p.id !== editingPlayer?.id).length;
+    if (playerForm.is_spotlight && spotlightCount >= 4) {
+      alert('Only 4 players can be spotlighted. Unselect one before enabling this.');
+      return;
+    }
+
     try {
-      const payload = { ...playerForm };
+      const payload = {
+        ...playerForm,
+        image_url: playerForm.image_url || null,
+      };
+
       if (playerForm.image_file) {
         payload.image_url = await fileToDataUrl(playerForm.image_file);
       }
+
       delete payload.image_file;
 
       await playerAPI.update(editingPlayer.id, payload);
@@ -263,15 +296,23 @@ const AdminPanel = ({ onClose }) => {
       squad_id: player.squad_id,
       image_url: player.image_url || '',
       image_file: null,
-      stats_goals: player.stats_goals || 0,
-      stats_assists: player.stats_assists || 0,
-      stats_matches: player.stats_matches || 0,
+      is_spotlight: !!player.is_spotlight,
+      stats_goals: player.stats?.goals || 0,
+      stats_assists: player.stats?.assists || 0,
+      stats_matches: player.stats?.matches || 0,
       quote: player.quote || ''
     });
     setShowPlayerForm(true);
   };
 
   const getSquadName = (id) => squads.find(s => s.id === id)?.name || 'Unknown';
+
+  const fileToDataUrl = (file) => new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => resolve(reader.result);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
 
   // LOGIN SCREEN
   if (!isAuthenticated) {
@@ -282,47 +323,118 @@ const AdminPanel = ({ onClose }) => {
             <div className="w-20 h-20 bg-gradient-to-br from-blue-600 to-cyan-400 rounded-full flex items-center justify-center mx-auto mb-4">
               <Lock className="w-10 h-10 text-white" />
             </div>
-            <h1 className="text-2xl font-bold">Admin Login</h1>
+            <h1 className="text-2xl font-bold">{isSignup ? 'Admin Signup' : 'Admin Login'}</h1>
             <p className="text-gray-400 mt-2">Eastleigh FC Academy</p>
           </div>
 
-          <form onSubmit={handleLogin} className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium mb-2">Username</label>
-              <input
-                type="text"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-3 focus:outline-none focus:border-cyan-400"
-                placeholder="Enter username"
-                required
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium mb-2">Password</label>
-              <input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-3 focus:outline-none focus:border-cyan-400"
-                placeholder="Enter Passsword"
-                required
-              />
-            </div>
-            
-            {authError && (
-              <div className="bg-red-500/20 border border-red-500/50 rounded-lg p-3 text-red-400 text-sm text-center">
-                {authError}
+          {!isSignup ? (
+            <form onSubmit={handleLogin} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium mb-2">Email</label>
+                <input
+                  type="email"
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                  className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-3 focus:outline-none focus:border-cyan-400"
+                  placeholder="Enter email"
+                  required
+                />
               </div>
-            )}
+              <div>
+                <label className="block text-sm font-medium mb-2">Password</label>
+                <input
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-3 focus:outline-none focus:border-cyan-400"
+                  placeholder="Enter password"
+                  required
+                />
+              </div>
+              
+              {authError && (
+                <div className="bg-red-500/20 border border-red-500/50 rounded-lg p-3 text-red-400 text-sm text-center">
+                  {authError}
+                </div>
+              )}
 
+              <button
+                type="submit"
+                className="w-full bg-gradient-to-r from-blue-600 to-cyan-400 text-white font-bold py-3 rounded-lg hover:opacity-90 transition-opacity"
+              >
+                Login
+              </button>
+            </form>
+          ) : (
+            <form onSubmit={handleSignup} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium mb-2">Username</label>
+                <input
+                  type="text"
+                  value={signupData.username}
+                  onChange={(e) => setSignupData({...signupData, username: e.target.value})}
+                  className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-3 focus:outline-none focus:border-cyan-400"
+                  placeholder="Enter username"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-2">Email</label>
+                <input
+                  type="email"
+                  value={signupData.email}
+                  onChange={(e) => setSignupData({...signupData, email: e.target.value})}
+                  className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-3 focus:outline-none focus:border-cyan-400"
+                  placeholder="Enter email"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-2">Password</label>
+                <input
+                  type="password"
+                  value={signupData.password}
+                  onChange={(e) => setSignupData({...signupData, password: e.target.value})}
+                  className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-3 focus:outline-none focus:border-cyan-400"
+                  placeholder="Enter password (min 8 chars)"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-2">Confirm Password</label>
+                <input
+                  type="password"
+                  value={signupData.confirmPassword}
+                  onChange={(e) => setSignupData({...signupData, confirmPassword: e.target.value})}
+                  className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-3 focus:outline-none focus:border-cyan-400"
+                  placeholder="Confirm password"
+                  required
+                />
+              </div>
+              
+              {signupError && (
+                <div className="bg-red-500/20 border border-red-500/50 rounded-lg p-3 text-red-400 text-sm text-center">
+                  {signupError}
+                </div>
+              )}
+
+              <button
+                type="submit"
+                className="w-full bg-gradient-to-r from-blue-600 to-cyan-400 text-white font-bold py-3 rounded-lg hover:opacity-90 transition-opacity"
+              >
+                Sign Up
+              </button>
+            </form>
+          )}
+
+          <div className="mt-4 text-center">
             <button
-              type="submit"
-              className="w-full bg-gradient-to-r from-blue-600 to-cyan-400 text-white font-bold py-3 rounded-lg hover:opacity-90 transition-opacity"
+              onClick={() => setIsSignup(!isSignup)}
+              className="text-cyan-400 hover:text-cyan-300 text-sm"
             >
-              Login
+              {isSignup ? 'Already have an account? Login' : 'Need an account? Sign up'}
             </button>
-          </form>
+          </div>
 
           <button
             onClick={onClose}
@@ -542,7 +654,7 @@ const AdminPanel = ({ onClose }) => {
                 onClick={() => {
                   setEditingPlayer(null);
                   setPlayerForm({
-                    first_name: '', last_name: '', age: '', position: 'MID', squad_id: '', image_url: '', image_file: null,
+                    first_name: '', last_name: '', age: '', position: 'MID', squad_id: '',
                     stats_goals: 0, stats_assists: 0, stats_matches: 0, quote: ''
                   });
                   setShowPlayerForm(true);
@@ -602,13 +714,31 @@ const AdminPanel = ({ onClose }) => {
                       <option key={s.id} value={s.id}>{s.name}</option>
                     ))}
                   </select>
-                  <input
-                    type="file"
-                    accept="image/*"
-                    onChange={(e) => setPlayerForm({...playerForm, image_file: e.target.files[0] || null})}
-                    className="bg-white/5 border border-white/10 rounded-lg px-4 py-2"
-                  />
-                  <p className="text-xs text-gray-400 md:col-span-3">Drop a player image here (optional). If not provided, initials will be used.</p>
+                  <div className="md:col-span-3">
+                    <label className="block text-sm font-medium mb-1">Player Image</label>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={(e) => setPlayerForm({...playerForm, image_file: e.target.files?.[0] || null})}
+                      className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-2"
+                    />
+                    {playerForm.image_url && !playerForm.image_file && (
+                      <img
+                        src={playerForm.image_url}
+                        alt="player"
+                        className="mt-2 h-24 w-24 object-cover rounded-lg border border-white/10"
+                      />
+                    )}
+                  </div>
+                  <div className="md:col-span-3 flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={playerForm.is_spotlight}
+                      onChange={(e) => setPlayerForm({...playerForm, is_spotlight: e.target.checked})}
+                      className="h-4 w-4 text-cyan-500 focus:ring-cyan-400 border-white/30 rounded"
+                    />
+                    <label className="text-sm">Include in Spotlight (max 4)</label>
+                  </div>
                   <input
                     type="number"
                     placeholder="Goals"
@@ -671,7 +801,7 @@ const AdminPanel = ({ onClose }) => {
                 <tbody>
                   {players.map((player) => (
                     <tr key={player.id} className="border-t border-white/10">
-                      <td className="p-4">{player.full_name}</td>
+                      <td className="p-4">{(player.full_name || `${player.first_name || ''} ${player.last_name || ''}`).trim() || 'Unnamed Player'}</td>
                       <td className="p-4">{player.age || '-'}</td>
                       <td className="p-4">
                         <span className={`px-2 py-1 rounded text-xs ${
@@ -685,7 +815,7 @@ const AdminPanel = ({ onClose }) => {
                       </td>
                       <td className="p-4">{getSquadName(player.squad_id)}</td>
                       <td className="p-4 text-sm">
-                        {player.stats_goals || 0}/{player.stats_assists || 0}/{player.stats_matches || 0}
+                        {player.stats?.goals}/{player.stats?.assists}/{player.stats?.matches}
                       </td>
                       <td className="p-4">
                         <div className="flex space-x-2">

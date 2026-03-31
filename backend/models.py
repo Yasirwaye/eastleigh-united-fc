@@ -1,5 +1,6 @@
 from flask_sqlalchemy import SQLAlchemy
 from datetime import datetime
+import bcrypt
 
 db = SQLAlchemy()
 
@@ -41,6 +42,7 @@ class Player(db.Model):
     stats_assists = db.Column(db.Integer, default=0)
     stats_matches = db.Column(db.Integer, default=0)
     image_url = db.Column(db.String(500))
+    is_spotlight = db.Column(db.Boolean, default=False)
     quote = db.Column(db.Text)
     is_active = db.Column(db.Boolean, default=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
@@ -61,9 +63,34 @@ class Player(db.Model):
             },
             'image_url': self.image_url,
             'quote': self.quote,
+            'is_spotlight': self.is_spotlight,
             'is_active': self.is_active,
             'created_at': self.created_at.isoformat()
         }
+
+class Admin(db.Model):
+    __tablename__ = 'admins'
+
+    id = db.Column(db.Integer, primary_key=True)
+    username = db.Column(db.String(80), nullable=False)
+    email = db.Column(db.String(120), nullable=False, unique=True)
+    password_hash = db.Column(db.String(255), nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    def set_password(self, password):
+        self.password_hash = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+
+    def check_password(self, password):
+        return bcrypt.checkpw(password.encode('utf-8'), self.password_hash.encode('utf-8'))
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'username': self.username,
+            'email': self.email,
+            'created_at': self.created_at.isoformat()
+        }
+
 
 class Application(db.Model):
     __tablename__ = 'applications'

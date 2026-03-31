@@ -13,7 +13,12 @@ const PlayerSpotlight = () => {
 
   const loadPlayers = async () => {
     try {
-      const data = await playerAPI.getAll({ position: 'MID' });
+      let data = await playerAPI.getAll({ is_spotlight: true, limit: 4 });
+
+      if (!data || data.length === 0) {
+        // fallback if no spotlight players are set yet
+        data = await playerAPI.getAll({ limit: 4 });
+      }
       setPlayers(data.slice(0, 4));
       setLoading(false);
     } catch (error) {
@@ -31,6 +36,9 @@ const PlayerSpotlight = () => {
       </section>
     );
   }
+
+  const getFullName = (player) =>
+    (player.full_name || `${player.first_name || ''} ${player.last_name || ''}`).trim() || 'Unnamed Player';
 
   if (players.length === 0) {
     return (
@@ -68,12 +76,12 @@ const PlayerSpotlight = () => {
               >
                 <img 
                   src={player.image_url || `https://ui-avatars.com/api/?name=${player.first_name}+${player.last_name}&background=0D8ABC&color=fff&size=400`} 
-                  alt={player.full_name} 
+                  alt={getFullName(player)} 
                   className="w-full h-full object-cover" 
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-[#0a0e1a] via-transparent to-transparent"></div>
                 <div className="absolute bottom-3 left-3 right-3">
-                  <div className="font-bold text-sm">{player.full_name}</div>
+                  <div className="font-bold text-sm">{getFullName(player)}</div>
                   <div className="text-xs text-cyan-400">{player.position}</div>
                 </div>
               </button>
@@ -83,7 +91,7 @@ const PlayerSpotlight = () => {
           <div className="glass rounded-3xl p-8 animate-fade-in">
             <div className="flex items-start justify-between mb-6">
               <div>
-                <h3 className="font-display text-3xl font-bold mb-1">{currentPlayer.full_name}</h3>
+                <h3 className="font-display text-3xl font-bold mb-1">{getFullName(currentPlayer)}</h3>
                 <p className="text-cyan-400 font-medium">{currentPlayer.position}</p>
               </div>
               <div className="glass px-4 py-2 rounded-full">
@@ -94,15 +102,15 @@ const PlayerSpotlight = () => {
 
             <div className="grid grid-cols-3 gap-4 mb-6">
               <div className="text-center p-4 bg-white/5 rounded-2xl">
-                <div className="font-display text-2xl font-bold text-green-400">{currentPlayer.stats_goals || 0}</div>
+                <div className="font-display text-2xl font-bold text-green-400">{currentPlayer.stats_goals ?? currentPlayer.stats?.goals ?? 0}</div>
                 <div className="text-xs text-gray-400">Goals</div>
               </div>
               <div className="text-center p-4 bg-white/5 rounded-2xl">
-                <div className="font-display text-2xl font-bold text-blue-400">{currentPlayer.stats_assists || 0}</div>
+                <div className="font-display text-2xl font-bold text-blue-400">{currentPlayer.stats_assists ?? currentPlayer.stats?.assists ?? 0}</div>
                 <div className="text-xs text-gray-400">Assists</div>
               </div>
               <div className="text-center p-4 bg-white/5 rounded-2xl">
-                <div className="font-display text-2xl font-bold text-white">{currentPlayer.stats_matches || 0}</div>
+                <div className="font-display text-2xl font-bold text-white">{currentPlayer.stats_matches ?? currentPlayer.stats?.matches ?? 0}</div>
                 <div className="text-xs text-gray-400">Matches</div>
               </div>
             </div>

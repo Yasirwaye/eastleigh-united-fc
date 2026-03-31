@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import Navbar from './components/Navbar';
 import Hero from './components/Hero';
-// import Highlights from './components/Highlights';
+import Highlights from './components/Highlights';
 import PlayerSpotlight from './components/PlayerSpotlight';
 import Training from './components/Training';
 import Facilities from './components/Facilities';
@@ -60,7 +60,7 @@ function App() {
         onAdminClick={() => setShowAdmin(true)}
       />
       <Hero scrollToSection={scrollToSection} />
-      {/* <Highlights /> */}
+      <Highlights />
       <PlayerSpotlight />
       <Training />
       <Facilities />

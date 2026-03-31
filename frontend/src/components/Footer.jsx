@@ -25,7 +25,7 @@ const Footer = () => {
               <span className="font-display font-bold text-xl">EASTLEIGH United FC ACADEMY</span>
             </div>
             <p className="text-gray-400 max-w-sm">
-              Developing elite football talent since 2020.
+              Developing elite football talent since 2019.
               Professional pathways for players aged 10-18.
             </p>
           </div>

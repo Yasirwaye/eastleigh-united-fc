@@ -12,7 +12,7 @@ const Navbar = ({ activeSection, scrollToSection, onAdminClick }) => {
   }, []);
 
   const navItems = [
-    // { id: 'highlights', label: 'Highlights' },
+    { id: 'highlights', label: 'Highlights' },
     { id: 'spotlight', label: 'Spotlight' },
     { id: 'training', label: 'Training' },
     { id: 'facilities', label: 'Facilities' },

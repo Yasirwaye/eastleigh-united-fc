@@ -1,5 +1,5 @@
 import React from 'react';
-import { ChevronRight, Trophy } from 'lucide-react';
+import { ChevronRight, Play, Trophy } from 'lucide-react';
 
 const Hero = ({ scrollToSection }) => {
   return (
@@ -37,7 +37,6 @@ const Hero = ({ scrollToSection }) => {
                 <span>Start Your Journey</span>
                 <ChevronRight className="w-5 h-5" />
               </button>
-              {/*
               <button
                 onClick={() => scrollToSection('highlights')}
                 className="glass px-8 py-4 rounded-full font-semibold hover:bg-white/10 transition-all flex items-center justify-center space-x-2"
@@ -45,13 +44,17 @@ const Hero = ({ scrollToSection }) => {
                 <Play className="w-5 h-5" />
                 <span>Watch Highlights</span>
               </button>
-              */}
             </div>
 
             <div className="flex items-center space-x-8 mt-12">
               <div>
-                <div className="font-display text-3xl font-bold text-cyan-400">500+</div>
+                <div className="font-display text-3xl font-bold text-cyan-400">250+</div>
                 <div className="text-sm text-gray-400">Graduates</div>
+              </div>
+              <div className="w-px h-12 bg-gray-700"></div>
+              <div>
+                <div className="font-display text-3xl font-bold text-cyan-400">25+</div>
+                <div className="text-sm text-gray-400">Pro Contracts</div>
               </div>
               <div className="w-px h-12 bg-gray-700"></div>
               <div>
