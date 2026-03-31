@@ -1,16 +1,24 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { X, Plus, Trash2, Edit2, Shield, Database, AlertTriangle, Lock, LogOut } from 'lucide-react';
-import { squadAPI, playerAPI, applicationAPI, initDatabase, adminAPI } from '../services/api';
+import { squadAPI, playerAPI, applicationAPI, initDatabase } from '../services/api';
+
+import { supabase } from '../services/api'; 
 
 const AdminPanel = ({ onClose }) => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [authError, setAuthError] = useState('');
-  const [isSignup, setIsSignup] = useState(false);
-  const [signupData, setSignupData] = useState({ username: '', email: '', password: '', confirmPassword: '' });
-  const [signupError, setSignupError] = useState('');
   
+  // COMMENTED OUT: Public signup disabled - create admins via Supabase dashboard only
+  // const [isSignup, setIsSignup] = useState(false);
+  // const [signupData, setSignupData] = useState({ username: '', email: '', password: '', confirmPassword: '' });
+  // const [signupError, setSignupError] = useState('');
+  
+  const [showForgotPassword, setShowForgotPassword] = useState(false);
+  const [forgotEmail, setForgotEmail] = useState('');
+  const [forgotMessage, setForgotMessage] = useState('');
+
   const [activeTab, setActiveTab] = useState('squads');
   const [squads, setSquads] = useState([]);
   const [players, setPlayers] = useState([]);
@@ -37,81 +45,175 @@ const AdminPanel = ({ onClose }) => {
   });
 
   useEffect(() => {
-    const token = localStorage.getItem('eastleigh_admin_token');
-    if (token) {
+  // Check Supabase session on mount
+  const checkSession = async () => {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session) setIsAuthenticated(true);
+  };
+  checkSession();
+  
+  // Listen for auth state changes
+  const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+    if (event === 'SIGNED_IN') {
       setIsAuthenticated(true);
+    } else if (event === 'SIGNED_OUT') {
+      setIsAuthenticated(false);
     }
-  }, []);
+  });
+  
+  // Cleanup subscription on unmount
+  return () => subscription.unsubscribe();
+}, []);
 
   const handleLogin = async (e) => {
-    e.preventDefault();
-    setAuthError('');
-    try {
-      const response = await adminAPI.login({ email: username, password });
-      localStorage.setItem('eastleigh_admin_token', response.access_token);
-      setIsAuthenticated(true);
-    } catch (err) {
-      setAuthError(err.message || 'Login failed');
-      setPassword('');
-    }
-  };
+  e.preventDefault();
+  setAuthError('');
+  try {
+    const { error } = await supabase.auth.signInWithPassword({ 
+      email: username, 
+      password 
+    });
+    if (error) throw error;
+    // DON'T store token manually - Supabase handles it
+    setIsAuthenticated(true);
+  } catch (err) {
+    setAuthError(err.message || 'Login failed');
+    setPassword('');
+  }
+};
 
-  const handleSignup = async (e) => {
-    e.preventDefault();
-    setSignupError('');
+  // COMMENTED OUT: Public signup disabled
+  // const handleSignup = async (e) => {
+  //   e.preventDefault();
+  //   setSignupError('');
     
-    if (signupData.password !== signupData.confirmPassword) {
-      setSignupError('Passwords do not match');
+  //   if (signupData.password !== signupData.confirmPassword) {
+  //     setSignupError('Passwords do not match');
+  //     return;
+  //   }
+    
+  //   try {
+  //     const response = await adminAPI.signup(signupData);
+  //     localStorage.setItem('eastleigh_admin_token', response.access_token);
+  //     setIsAuthenticated(true);
+  //     setIsSignup(false);
+  //     setSignupData({ username: '', email: '', password: '', confirmPassword: '' });
+  //   } catch (err) {
+  //     setSignupError(err.message || 'Signup failed');
+  //   }
+  // };
+
+  const handleForgotPassword = async (e) => {
+    e.preventDefault();
+    setForgotMessage('');
+    
+    // Basic email validation
+    if (!forgotEmail.includes('@')) {
+      setForgotMessage('Please enter a valid email');
       return;
     }
     
     try {
-      const response = await adminAPI.signup(signupData);
-      localStorage.setItem('eastleigh_admin_token', response.access_token);
-      setIsAuthenticated(true);
-      setIsSignup(false);
-      setSignupData({ username: '', email: '', password: '', confirmPassword: '' });
+      const { error } = await supabase.auth.resetPasswordForEmail(forgotEmail, {
+        redirectTo: `${window.location.origin}/#admin`,
+      });
+      if (error) throw error;
+      setForgotMessage('Check your email for password reset link!');
     } catch (err) {
-      setSignupError(err.message || 'Signup failed');
+      setForgotMessage(err.message || 'Failed to send reset email');
     }
   };
 
+  // COMMENTED OUT: This JSX was floating outside the return statement
+  // {showForgotPassword && (
+  //   <form onSubmit={handleForgotPassword} className="space-y-4 mt-6 border-t border-white/10 pt-6">
+  //     <h3 className="text-lg font-bold text-center">Reset Password</h3>
+  //     <div>
+  //       <label className="block text-sm font-medium mb-2">Email</label>
+  //       <input
+  //         type="email"
+  //         value={forgotEmail}
+  //         onChange={(e) => setForgotEmail(e.target.value)}
+  //         className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-3 focus:outline-none focus:border-cyan-400"
+  //         placeholder="Enter your email"
+  //         required
+  //       />
+  //     </div>
+  //     
+  //     {forgotMessage && (
+  //       <div className={`rounded-lg p-3 text-sm text-center ${forgotMessage.includes('Check') ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}`}>
+  //         {forgotMessage}
+  //       </div>
+  //     )}
+  //
+  //     <button
+  //       type="submit"
+  //       className="w-full bg-gradient-to-r from-blue-600 to-cyan-400 text-white font-bold py-3 rounded-lg hover:opacity-90 transition-opacity"
+  //     >
+  //       Send Reset Link
+  //     </button>
+  //     
+  //     <button
+  //       type="button"
+  //       onClick={() => setShowForgotPassword(false)}
+  //       className="w-full glass py-3 rounded-lg hover:bg-white/10 transition-colors"
+  //     >
+  //       Back to Login
+  //     </button>
+  //   </form>
+  // )}
+
   const handleLogout = async () => {
   try {
-    await adminAPI.logout();
+    await supabase.auth.signOut();
   } catch (err) {
     console.error('Logout error:', err);
   }
   setIsAuthenticated(false);
-  localStorage.removeItem('eastleigh_admin_token');
   setUsername('');
   setPassword('');
+  // DON'T remove from localStorage - Supabase handles it
 };
 
   const loadData = useCallback(async () => {
-    setLoading(true);
-    try {
-      if (activeTab === 'squads') {
-        const data = await squadAPI.getAll();
+  setLoading(true);
+  setError(null);
+  
+  // Capture current tab to prevent race conditions
+  const currentTab = activeTab;
+  
+  try {
+    if (currentTab === 'squads') {
+      const data = await squadAPI.getAll();
+      // Only update if tab hasn't changed
+      if (activeTab === currentTab) {
         setSquads(data);
-      } else if (activeTab === 'players') {
-        const [squadsData, playersData] = await Promise.all([
-          squadAPI.getAll(),
-          playerAPI.getAll()
-        ]);
+      }
+    } else if (currentTab === 'players') {
+      const [squadsData, playersData] = await Promise.all([
+        squadAPI.getAll(),
+        playerAPI.getAll()
+      ]);
+      if (activeTab === currentTab) {
         setSquads(squadsData);
         setPlayers(playersData);
-      } else if (activeTab === 'applications') {
-        const data = await applicationAPI.getAll();
+      }
+    } else if (currentTab === 'applications') {
+      const data = await applicationAPI.getAll();
+      if (activeTab === currentTab) {
         setApplications(data);
       }
-      setError(null);
-    } catch (err) {
-      setError('Failed to load data. Make sure the backend is running.');
-    } finally {
+    }
+  } catch (err) {
+    if (activeTab === currentTab) {
+      setError('Failed to load data. Please try again.');
+    }
+  } finally {
+    if (activeTab === currentTab) {
       setLoading(false);
     }
-  }, [activeTab]);
+  }
+}, [activeTab]);
 
   useEffect(() => {
     if (isAuthenticated) {
@@ -313,11 +415,17 @@ const AdminPanel = ({ onClose }) => {
   const getSquadName = (id) => squads.find(s => s.id === id)?.name || 'Unknown';
 
   const fileToDataUrl = (file) => new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onloadend = () => resolve(reader.result);
-    reader.onerror = reject;
-    reader.readAsDataURL(file);
-  });
+  // 2MB limit
+  if (file.size > 2 * 1024 * 1024) {
+    reject(new Error('Image must be less than 2MB'));
+    return;
+  }
+  
+  const reader = new FileReader();
+  reader.onloadend = () => resolve(reader.result);
+  reader.onerror = reject;
+  reader.readAsDataURL(file);
+});
 
   // LOGIN SCREEN
   if (!isAuthenticated) {
@@ -328,11 +436,11 @@ const AdminPanel = ({ onClose }) => {
             <div className="w-20 h-20 bg-gradient-to-br from-blue-600 to-cyan-400 rounded-full flex items-center justify-center mx-auto mb-4">
               <Lock className="w-10 h-10 text-white" />
             </div>
-            <h1 className="text-2xl font-bold">{isSignup ? 'Admin Signup' : 'Admin Login'}</h1>
+            <h1 className="text-2xl font-bold">Admin Login</h1>
             <p className="text-gray-400 mt-2">Eastleigh FC Academy</p>
           </div>
 
-          {!isSignup ? (
+          {!showForgotPassword ? (
             <form onSubmit={handleLogin} className="space-y-4">
               <div>
                 <label className="block text-sm font-medium mb-2">Email</label>
@@ -357,6 +465,17 @@ const AdminPanel = ({ onClose }) => {
                 />
               </div>
               
+              {/* Forgot Password Link */}
+              <div className="flex justify-end">
+                <button
+                  type="button"
+                  onClick={() => setShowForgotPassword(true)}
+                  className="text-cyan-400 hover:text-cyan-300 text-sm"
+                >
+                  Forgot password?
+                </button>
+              </div>
+              
               {authError && (
                 <div className="bg-red-500/20 border border-red-500/50 rounded-lg p-3 text-red-400 text-sm text-center">
                   {authError}
@@ -371,55 +490,24 @@ const AdminPanel = ({ onClose }) => {
               </button>
             </form>
           ) : (
-            <form onSubmit={handleSignup} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium mb-2">Username</label>
-                <input
-                  type="text"
-                  value={signupData.username}
-                  onChange={(e) => setSignupData({...signupData, username: e.target.value})}
-                  className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-3 focus:outline-none focus:border-cyan-400"
-                  placeholder="Enter username"
-                  required
-                />
-              </div>
+            /* Forgot Password Form */
+            <form onSubmit={handleForgotPassword} className="space-y-4">
+              <h3 className="text-lg font-bold text-center">Reset Password</h3>
               <div>
                 <label className="block text-sm font-medium mb-2">Email</label>
                 <input
                   type="email"
-                  value={signupData.email}
-                  onChange={(e) => setSignupData({...signupData, email: e.target.value})}
+                  value={forgotEmail}
+                  onChange={(e) => setForgotEmail(e.target.value)}
                   className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-3 focus:outline-none focus:border-cyan-400"
-                  placeholder="Enter email"
-                  required
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium mb-2">Password</label>
-                <input
-                  type="password"
-                  value={signupData.password}
-                  onChange={(e) => setSignupData({...signupData, password: e.target.value})}
-                  className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-3 focus:outline-none focus:border-cyan-400"
-                  placeholder="Enter password (min 8 chars)"
-                  required
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium mb-2">Confirm Password</label>
-                <input
-                  type="password"
-                  value={signupData.confirmPassword}
-                  onChange={(e) => setSignupData({...signupData, confirmPassword: e.target.value})}
-                  className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-3 focus:outline-none focus:border-cyan-400"
-                  placeholder="Confirm password"
+                  placeholder="Enter your email"
                   required
                 />
               </div>
               
-              {signupError && (
-                <div className="bg-red-500/20 border border-red-500/50 rounded-lg p-3 text-red-400 text-sm text-center">
-                  {signupError}
+              {forgotMessage && (
+                <div className={`rounded-lg p-3 text-sm text-center ${forgotMessage.includes('Check') ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}`}>
+                  {forgotMessage}
                 </div>
               )}
 
@@ -427,11 +515,20 @@ const AdminPanel = ({ onClose }) => {
                 type="submit"
                 className="w-full bg-gradient-to-r from-blue-600 to-cyan-400 text-white font-bold py-3 rounded-lg hover:opacity-90 transition-opacity"
               >
-                Sign Up
+                Send Reset Link
+              </button>
+              
+              <button
+                type="button"
+                onClick={() => setShowForgotPassword(false)}
+                className="w-full glass py-3 rounded-lg hover:bg-white/10 transition-colors"
+              >
+                Back to Login
               </button>
             </form>
           )}
 
+          {/* COMMENTED OUT: Public signup disabled
           <div className="mt-4 text-center">
             <button
               onClick={() => setIsSignup(!isSignup)}
@@ -440,6 +537,7 @@ const AdminPanel = ({ onClose }) => {
               {isSignup ? 'Already have an account? Login' : 'Need an account? Sign up'}
             </button>
           </div>
+          */}
 
           <button
             onClick={onClose}
@@ -569,6 +667,7 @@ const AdminPanel = ({ onClose }) => {
                   <input
                     type="text"
                     placeholder="Squad Name"
+                    maxLength={100} // Database limit
                     value={squadForm.name}
                     onChange={(e) => setSquadForm({...squadForm, name: e.target.value})}
                     className="bg-white/5 border border-white/10 rounded-lg px-4 py-2"
@@ -678,6 +777,7 @@ const AdminPanel = ({ onClose }) => {
                   <input
                     type="text"
                     placeholder="First Name"
+                    maxLength={50}
                     value={playerForm.first_name}
                     onChange={(e) => setPlayerForm({...playerForm, first_name: e.target.value})}
                     className="bg-white/5 border border-white/10 rounded-lg px-4 py-2"

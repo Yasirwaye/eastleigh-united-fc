@@ -477,3 +477,5 @@ export const healthCheck = async () => {
 const apiClient = { squadAPI, playerAPI, applicationAPI, adminAPI, healthCheck, initDatabase };
 
 export default apiClient;
+
+export { supabase };
