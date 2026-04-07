@@ -10,6 +10,7 @@ import Testimonials from './components/Testimonials';
 import ApplicationForm from './components/ApplicationForm';
 import Footer from './components/Footer';
 import AdminPanel from './components/AdminPanel';
+import ErrorBoundary from './components/ErrorBoundary';
 
 function App() {
   const [activeSection, setActiveSection] = useState('welcome');
@@ -53,22 +54,24 @@ function App() {
   }
 
   return (
-    <div className="min-h-screen bg-[#0a0e1a] text-white overflow-x-hidden">
-      <Navbar 
-        activeSection={activeSection} 
-        scrollToSection={scrollToSection}
-        onAdminClick={() => setShowAdmin(true)}
-      />
-      <Hero scrollToSection={scrollToSection} />
-      <Highlights />
-      <PlayerSpotlight />
-      <Training />
-      <Facilities />
-      <Squads />
-      <Testimonials />
-      <ApplicationForm />
-      <Footer />
-    </div>
+    <ErrorBoundary>
+      <div className="min-h-screen bg-[#0a0e1a] text-white overflow-x-hidden">
+        <Navbar 
+          activeSection={activeSection} 
+          scrollToSection={scrollToSection}
+          onAdminClick={() => setShowAdmin(true)}
+        />
+        <Hero scrollToSection={scrollToSection} />
+        <Highlights />
+        <PlayerSpotlight />
+        <Training />
+        <Facilities />
+        <Squads />
+        <Testimonials />
+        <ApplicationForm />
+        <Footer />
+      </div>
+    </ErrorBoundary>
   );
 }
 

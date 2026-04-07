@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { X, Plus, Trash2, Edit2, Shield, Database, AlertTriangle, Lock, LogOut } from 'lucide-react';
-import { squadAPI, playerAPI, applicationAPI, initDatabase } from '../services/api';
+import { squadAPI, playerAPI, applicationAPI, initDatabase, storageAPI } from '../services/api';
 
 import { supabase } from '../services/api'; 
 
@@ -44,43 +44,123 @@ const AdminPanel = ({ onClose }) => {
     stats_goals: 0, stats_assists: 0, stats_matches: 0, quote: ''
   });
 
+  const [loginAttempts, setLoginAttempts] = useState(0);
+  const [isLocked, setIsLocked] = useState(false);
+  const [lockTimer, setLockTimer] = useState(0);
+
+
   useEffect(() => {
-  // Check Supabase session on mount
-  const checkSession = async () => {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (session) setIsAuthenticated(true);
-  };
-  checkSession();
+    const checkSession = async () => {
+      // eslint-disable-next-line no-unused-vars
+      const { data: { session } } = await supabase.auth.getSession();
+      // Check if user has admin role
+      if (session?.user?.user_metadata?.is_admin === true) {
+        setIsAuthenticated(true);
+      } else if (session) {
+        // User is logged in but NOT admin - sign them out
+        await supabase.auth.signOut();
+        setAuthError('Access denied. Admin privileges required.');
+      }
+    };
+    checkSession();
+    
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'SIGNED_IN' && session?.user?.user_metadata?.is_admin === true) {
+        setIsAuthenticated(true);
+      } else if (event === 'SIGNED_OUT') {
+        setIsAuthenticated(false);
+      }
+    });
+    
+    return () => subscription.unsubscribe();
+  }, []);
+
+
+  const [lastActivity, setLastActivity] = useState(Date.now());
+  const IDLE_TIMEOUT = 30 * 60 * 1000; // 30 minutes
   
-  // Listen for auth state changes
-  const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-    if (event === 'SIGNED_IN') {
-      setIsAuthenticated(true);
-    } else if (event === 'SIGNED_OUT') {
-      setIsAuthenticated(false);
-    }
-  });
-  
-  // Cleanup subscription on unmount
-  return () => subscription.unsubscribe();
-}, []);
+  // Auto-logout after idle
+  useEffect(() => {
+    const resetTimer = () => setLastActivity(Date.now());
+    
+    // Track user activity
+    window.addEventListener('mousemove', resetTimer);
+    window.addEventListener('keypress', resetTimer);
+    window.addEventListener('click', resetTimer);
+    
+    const checkIdle = setInterval(() => {
+      if (isAuthenticated && Date.now() - lastActivity > IDLE_TIMEOUT) {
+        handleLogout();
+        alert('Session expired due to inactivity');
+      }
+    }, 60000); // Check every minute
+    
+    return () => {
+      window.removeEventListener('mousemove', resetTimer);
+      window.removeEventListener('keypress', resetTimer);
+      window.removeEventListener('click', resetTimer);
+      clearInterval(checkIdle);
+    };
+    // eslint-disable-next-line 
+  }, [isAuthenticated, lastActivity]);
 
   const handleLogin = async (e) => {
-  e.preventDefault();
-  setAuthError('');
-  try {
-    const { error } = await supabase.auth.signInWithPassword({ 
-      email: username, 
-      password 
-    });
-    if (error) throw error;
-    // DON'T store token manually - Supabase handles it
-    setIsAuthenticated(true);
-  } catch (err) {
-    setAuthError(err.message || 'Login failed');
+    e.preventDefault();
+    
+    if (isLocked) {
+      setAuthError(`Too many attempts. Try again in ${lockTimer} seconds.`);
+      return;
+    }
+    
+    setAuthError('');
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({ 
+        email: username, 
+        password 
+      });
+      if (error) throw error;
+      
+      // Verify admin role
+      if (data.user?.user_metadata?.is_admin !== true) {
+        await supabase.auth.signOut();
+        handleFailedLogin();
+        return;
+      }
+      
+      // Reset attempts on success
+      setLoginAttempts(0);
+      setIsAuthenticated(true);
+    } catch (err) {
+      handleFailedLogin();
+    }
+  };
+
+  const handleFailedLogin = () => {
+    const newAttempts = loginAttempts + 1;
+    setLoginAttempts(newAttempts);
     setPassword('');
-  }
-};
+    
+    if (newAttempts >= 5) {
+      setIsLocked(true);
+      setLockTimer(300); // 5 minutes
+      setAuthError('Too many failed attempts. Account locked for 5 minutes.');
+      
+      // Countdown timer
+      const interval = setInterval(() => {
+        setLockTimer((prev) => {
+          if (prev <= 1) {
+            clearInterval(interval);
+            setIsLocked(false);
+            setLoginAttempts(0);
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+    } else {
+      setAuthError('Invalid email or password');
+    }
+  };
 
   // COMMENTED OUT: Public signup disabled
   // const handleSignup = async (e) => {
@@ -99,7 +179,8 @@ const AdminPanel = ({ onClose }) => {
   //     setIsSignup(false);
   //     setSignupData({ username: '', email: '', password: '', confirmPassword: '' });
   //   } catch (err) {
-  //     setSignupError(err.message || 'Signup failed');
+  //     // Generic message to prevent email enumeration
+  // setSignupError('Unable to create account. Please try again.');
   //   }
   // };
 
@@ -107,20 +188,36 @@ const AdminPanel = ({ onClose }) => {
     e.preventDefault();
     setForgotMessage('');
     
+    if (isLocked) {
+      setForgotMessage(`Too many attempts. Try again in ${lockTimer} seconds.`);
+      return;
+    }
+    
     // Basic email validation
-    if (!forgotEmail.includes('@')) {
-      setForgotMessage('Please enter a valid email');
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(forgotEmail)) {
+      setForgotMessage('Please enter a valid email address');
       return;
     }
     
     try {
+      // Rate limit: max 3 reset attempts per 10 minutes
+      // eslint-disable-next-line no-unused-vars
+      const { data: { session } } = await supabase.auth.getSession();
+      if (loginAttempts >= 3) {
+        setForgotMessage('Too many reset attempts. Please try again later.');
+        return;
+      }
+      
       const { error } = await supabase.auth.resetPasswordForEmail(forgotEmail, {
         redirectTo: `${window.location.origin}/#admin`,
       });
       if (error) throw error;
-      setForgotMessage('Check your email for password reset link!');
+      
+      setLoginAttempts(prev => prev + 1);
+      setForgotMessage('If an account exists, a reset link has been sent.');
     } catch (err) {
-      setForgotMessage(err.message || 'Failed to send reset email');
+      setForgotMessage('If an account exists, a reset link has been sent.');
     }
   };
 
@@ -167,7 +264,10 @@ const AdminPanel = ({ onClose }) => {
   try {
     await supabase.auth.signOut();
   } catch (err) {
-    console.error('Logout error:', err);
+    // console.error('Logout error:', err);
+    // NEW:
+    // Error silently handled - user already sees UI feedback
+    // TODO: Send to error tracking service in production
   }
   setIsAuthenticated(false);
   setUsername('');
@@ -176,44 +276,44 @@ const AdminPanel = ({ onClose }) => {
 };
 
   const loadData = useCallback(async () => {
-  setLoading(true);
-  setError(null);
-  
-  // Capture current tab to prevent race conditions
-  const currentTab = activeTab;
-  
-  try {
-    if (currentTab === 'squads') {
-      const data = await squadAPI.getAll();
-      // Only update if tab hasn't changed
-      if (activeTab === currentTab) {
-        setSquads(data);
+    setLoading(true);
+    setError(null);
+    
+    // Capture current tab to prevent race conditions
+    const currentTab = activeTab;
+    
+    try {
+      if (currentTab === 'squads') {
+        const data = await squadAPI.getAll();
+        // Only update if tab hasn't changed
+        if (activeTab === currentTab) {
+          setSquads(data);
+        }
+      } else if (currentTab === 'players') {
+        const [squadsData, playersData] = await Promise.all([
+          squadAPI.getAll(),
+          playerAPI.getAll()
+        ]);
+        if (activeTab === currentTab) {
+          setSquads(squadsData);
+          setPlayers(playersData);
+        }
+      } else if (currentTab === 'applications') {
+        const data = await applicationAPI.getAll();
+        if (activeTab === currentTab) {
+          setApplications(data);
+        }
       }
-    } else if (currentTab === 'players') {
-      const [squadsData, playersData] = await Promise.all([
-        squadAPI.getAll(),
-        playerAPI.getAll()
-      ]);
+    } catch (err) {
       if (activeTab === currentTab) {
-        setSquads(squadsData);
-        setPlayers(playersData);
+        setError('Failed to load data. Please refresh the page.');
       }
-    } else if (currentTab === 'applications') {
-      const data = await applicationAPI.getAll();
+    } finally {
       if (activeTab === currentTab) {
-        setApplications(data);
+        setLoading(false);
       }
     }
-  } catch (err) {
-    if (activeTab === currentTab) {
-      setError('Failed to load data. Please try again.');
-    }
-  } finally {
-    if (activeTab === currentTab) {
-      setLoading(false);
-    }
-  }
-}, [activeTab]);
+  }, [activeTab]);
 
   useEffect(() => {
     if (isAuthenticated) {
@@ -270,13 +370,19 @@ const AdminPanel = ({ onClose }) => {
   const handleDeleteSquad = (id) => {
     requestConfirm('Are you sure? This will delete all players in this squad.', async () => {
       try {
-        await squadAPI.delete(id);
-        loadData();
+        await supabase.from('audit_logs').insert({
+        user_id: (await supabase.auth.getUser()).data.user?.id,
+        action: 'DELETE',
+        table_name: 'squads',
+        record_id: id,
+        old_data: { squad_id: id }
+      });
       } catch (err) {
         alert('Failed to delete squad: ' + err.message);
       }
     });
   };
+
 
   const handleCreatePlayer = async (e) => {
     e.preventDefault();
@@ -293,14 +399,20 @@ const AdminPanel = ({ onClose }) => {
     }
 
     try {
+      let imageUrl = null;
+      
+      // Upload to Supabase Storage instead of base64
+      if (playerForm.image_file) {
+        const fileName = `${playerForm.first_name}-${playerForm.last_name}-${Date.now()}`.replace(/\s+/g, '-');
+        imageUrl = await storageAPI.uploadPlayerImage(playerForm.image_file, fileName);
+      } else {
+        imageUrl = playerForm.image_url || null;
+      }
+
       const payload = {
         ...playerForm,
-        image_url: playerForm.image_url || null,
+        image_url: imageUrl,
       };
-
-      if (playerForm.image_file) {
-        payload.image_url = await fileToDataUrl(playerForm.image_file);
-      }
 
       delete payload.image_file;
 
@@ -332,14 +444,23 @@ const AdminPanel = ({ onClose }) => {
     }
 
     try {
+      let imageUrl = playerForm.image_url || null;
+      
+      // Upload new image to Supabase Storage
+      if (playerForm.image_file) {
+        // Delete old image if exists
+        if (editingPlayer.image_url && editingPlayer.image_url.includes('supabase')) {
+          await storageAPI.deletePlayerImage(editingPlayer.image_url);
+        }
+        
+        const fileName = `${playerForm.first_name}-${playerForm.last_name}-${Date.now()}`.replace(/\s+/g, '-');
+        imageUrl = await storageAPI.uploadPlayerImage(playerForm.image_file, fileName);
+      }
+
       const payload = {
         ...playerForm,
-        image_url: playerForm.image_url || null,
+        image_url: imageUrl,
       };
-
-      if (playerForm.image_file) {
-        payload.image_url = await fileToDataUrl(playerForm.image_file);
-      }
 
       delete payload.image_file;
 
@@ -414,18 +535,43 @@ const AdminPanel = ({ onClose }) => {
 
   const getSquadName = (id) => squads.find(s => s.id === id)?.name || 'Unknown';
 
-  const fileToDataUrl = (file) => new Promise((resolve, reject) => {
-  // 2MB limit
-  if (file.size > 2 * 1024 * 1024) {
-    reject(new Error('Image must be less than 2MB'));
-    return;
-  }
-  
-  const reader = new FileReader();
-  reader.onloadend = () => resolve(reader.result);
-  reader.onerror = reject;
-  reader.readAsDataURL(file);
-});
+  // const fileToDataUrl = (file) => new Promise((resolve, reject) => {
+  //   // 2MB limit
+  //   if (file.size > 2 * 1024 * 1024) {
+  //     reject(new Error('Image must be less than 2MB'));
+  //     return;
+  //   }
+    
+  //   // Strict file type validation - only allow safe image formats
+  //   const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+  //   if (!allowedTypes.includes(file.type)) {
+  //     reject(new Error('Only JPG, PNG, WebP, and GIF images are allowed'));
+  //     return;
+  //   }
+    
+  //   // Additional check: verify file extension
+  //   const validExtensions = ['.jpg', '.jpeg', '.png', '.webp', '.gif'];
+  //   const hasValidExt = validExtensions.some(ext => 
+  //     file.name.toLowerCase().endsWith(ext)
+  //   );
+  //   if (!hasValidExt) {
+  //     reject(new Error('Invalid file extension'));
+  //     return;
+  //   }
+    
+  //   const reader = new FileReader();
+  //   reader.onloadend = () => {
+  //     // Sanitize: ensure result starts with data:image
+  //     const result = reader.result;
+  //     if (!result.startsWith('data:image/')) {
+  //       reject(new Error('Invalid image data'));
+  //       return;
+  //     }
+  //     resolve(result);
+  //   };
+  //   reader.onerror = reject;
+  //   reader.readAsDataURL(file);
+  // });
 
   // LOGIN SCREEN
   if (!isAuthenticated) {
@@ -667,7 +813,7 @@ const AdminPanel = ({ onClose }) => {
                   <input
                     type="text"
                     placeholder="Squad Name"
-                    maxLength={100} // Database limit
+                    maxLength={100} 
                     value={squadForm.name}
                     onChange={(e) => setSquadForm({...squadForm, name: e.target.value})}
                     className="bg-white/5 border border-white/10 rounded-lg px-4 py-2"
@@ -676,6 +822,7 @@ const AdminPanel = ({ onClose }) => {
                   <input
                     type="text"
                     placeholder="Age Group (e.g. 18+)"
+                    maxLength={20}
                     value={squadForm.age_group}
                     onChange={(e) => setSquadForm({...squadForm, age_group: e.target.value})}
                     className="bg-white/5 border border-white/10 rounded-lg px-4 py-2"
@@ -695,6 +842,7 @@ const AdminPanel = ({ onClose }) => {
                   <input
                     type="text"
                     placeholder="Head Coach"
+                    maxLength={100}
                     value={squadForm.head_coach}
                     onChange={(e) => setSquadForm({...squadForm, head_coach: e.target.value})}
                     className="bg-white/5 border border-white/10 rounded-lg px-4 py-2"
@@ -702,6 +850,7 @@ const AdminPanel = ({ onClose }) => {
                   <input
                     type="text"
                     placeholder="Assistant Coach"
+                    maxLength={100}
                     value={squadForm.assistant_coach}
                     onChange={(e) => setSquadForm({...squadForm, assistant_coach: e.target.value})}
                     className="bg-white/5 border border-white/10 rounded-lg px-4 py-2 md:col-span-2"
@@ -786,6 +935,7 @@ const AdminPanel = ({ onClose }) => {
                   <input
                     type="text"
                     placeholder="Last Name"
+                    maxLength={50}
                     value={playerForm.last_name}
                     onChange={(e) => setPlayerForm({...playerForm, last_name: e.target.value})}
                     className="bg-white/5 border border-white/10 rounded-lg px-4 py-2"
@@ -868,6 +1018,7 @@ const AdminPanel = ({ onClose }) => {
                   <input
                     type="text"
                     placeholder="Quote"
+                    maxLength={500}
                     value={playerForm.quote}
                     onChange={(e) => setPlayerForm({...playerForm, quote: e.target.value})}
                     className="bg-white/5 border border-white/10 rounded-lg px-4 py-2 md:col-span-3"

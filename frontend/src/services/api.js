@@ -232,6 +232,37 @@ export const playerAPI = {
   },
 };
 
+// Storage API
+export const storageAPI = {
+  uploadPlayerImage: async (file, playerId) => {
+    const fileExt = file.name.split('.').pop();
+    const fileName = `${playerId}-${Date.now()}.${fileExt}`;
+    
+    const { error } = await supabase.storage
+      .from('player-images')
+      .upload(fileName, file);
+      
+    if (error) throw error;
+    
+    // Get public URL
+    const { data: { publicUrl } } = supabase.storage
+      .from('player-images')
+      .getPublicUrl(fileName);
+      
+    return publicUrl;
+  },
+  
+  deletePlayerImage: async (imageUrl) => {
+    if (!imageUrl) return;
+    // Extract filename from URL
+    const fileName = imageUrl.split('/').pop();
+    const { error } = await supabase.storage
+      .from('player-images')
+      .remove([fileName]);
+    if (error) console.error('Failed to delete image:', error);
+  }
+};
+
 // Application APIs
 export const applicationAPI = {
   getAll: async (status) => {
